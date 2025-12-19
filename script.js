@@ -270,21 +270,109 @@ function showLoading(show) {
 // ========== Data Loading ==========
 async function loadData() {
     try {
-        // Try to load from Google Sheets API
-        const response = await fetch(`${CONFIG.API_BASE_URL}?action=getAll`);
+        // Thêm timestamp để tránh cache
+        const timestamp = new Date().getTime();
+        const apiUrl = `${CONFIG.API_BASE_URL}?action=getAll&_=${timestamp}`;
+        
+        console.log('🌐 Fetching data from:', apiUrl);
+        
+        // Thêm mode: 'cors' và credentials: 'omit'
+        const response = await fetch(apiUrl, {
+            method: 'GET',
+            mode: 'cors',  // THÊM DÒNG NÀY
+            cache: 'no-cache',
+            headers: {
+                'Accept': 'application/json',
+                'Content-Type': 'application/json'
+            }
+        });
+        
+        console.log('📊 Response status:', response.status, response.statusText);
+        
         if (response.ok) {
             const data = await response.json();
+            console.log('✅ Data loaded successfully!');
+            console.log(`📊 Stats: ${data.courses?.length || 0} courses, ${data.teachers?.length || 0} teachers`);
+            
             appState.data = data;
-            console.log('Data loaded from Google Sheets');
+            return true;
         } else {
-            throw new Error('Failed to load from API');
+            console.error('❌ API Error:', response.status, response.statusText);
+            throw new Error(`API Error: ${response.status} ${response.statusText}`);
         }
     } catch (error) {
-        console.warn('Using mock data as fallback:', error);
+        console.warn('⚠️ Using mock data as fallback. Error:', error.message);
+        console.log('🔧 This is usually a CORS issue. Check your Google Apps Script deployment.');
+        
+        // Hiển thị thông báo cho user
+        if (window.location.hostname !== 'localhost') {
+            console.log('💡 TIP: Try testing the API directly:');
+            console.log(`💡 ${CONFIG.API_BASE_URL}?action=getAll`);
+        }
+        
         appState.data = MOCK_DATA;
+        return false;
     }
 }
+async function testAPIConnection() {
+    console.group('🔧 API Connection Test');
+    
+    // Test 1: Direct URL access
+    console.log('Test 1: Testing direct URL access...');
+    try {
+        const testUrl = `${CONFIG.API_BASE_URL}?action=getAll&_=${Date.now()}`;
+        const directTest = await fetch(testUrl, { mode: 'no-cors' });
+        console.log('Direct test result:', directTest.type, directTest.status);
+    } catch (e) {
+        console.log('Direct test error:', e.message);
+    }
+    
+    // Test 2: With CORS mode
+    console.log('Test 2: Testing with CORS mode...');
+    try {
+        const corsTest = await fetch(`${CONFIG.API_BASE_URL}?action=getAll`, { 
+            mode: 'cors',
+            headers: { 'Accept': 'application/json' }
+        });
+        console.log('CORS test status:', corsTest.status, corsTest.statusText);
+        if (corsTest.ok) {
+            const data = await corsTest.json();
+            console.log('CORS test SUCCESS! Data keys:', Object.keys(data));
+        }
+    } catch (e) {
+        console.log('CORS test error:', e.message);
+    }
+    
+    // Test 3: Using JSONP alternative (nếu CORS vẫn lỗi)
+    console.log('Test 3: Testing JSONP alternative...');
+    await testJSONP();
+    
+    console.groupEnd();
+}
 
+function testJSONP() {
+    return new Promise((resolve) => {
+        const callbackName = 'jsonpCallback_' + Date.now();
+        const script = document.createElement('script');
+        
+        window[callbackName] = function(data) {
+            console.log('JSONP SUCCESS! Data received:', data);
+            document.head.removeChild(script);
+            delete window[callbackName];
+            resolve(true);
+        };
+        
+        script.src = `${CONFIG.API_BASE_URL}?action=getAll&callback=${callbackName}`;
+        script.onerror = () => {
+            console.log('JSONP failed - CORS issue confirmed');
+            document.head.removeChild(script);
+            delete window[callbackName];
+            resolve(false);
+        };
+        
+        document.head.appendChild(script);
+    });
+}
 async function refreshData() {
     showLoading(true);
     await loadData();
