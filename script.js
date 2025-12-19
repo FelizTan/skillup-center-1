@@ -269,18 +269,31 @@ function showLoading(show) {
 
 // ========== Data Loading ==========
 async function loadData() {
+    console.log('🔄 Attempting to load data from:', CONFIG.API_BASE_URL);
+    
     try {
-        // Try to load from Google Sheets API
-        const response = await fetch(`${CONFIG.API_BASE_URL}?action=getAll`);
+        const apiUrl = `${CONFIG.API_BASE_URL}?action=getAll&t=${Date.now()}`;
+        console.log('📡 Fetching:', apiUrl);
+        
+        const response = await fetch(apiUrl);
+        
+        console.log('📊 Response status:', response.status);
+        console.log('📊 Response ok:', response.ok);
+        
         if (response.ok) {
             const data = await response.json();
+            console.log('✅ Data loaded successfully:', data);
+            console.log('📝 Courses count:', data.courses?.length || 0);
+            console.log('👨‍🏫 Teachers count:', data.teachers?.length || 0);
+            console.log('📰 Blog count:', data.blog?.length || 0);
+            
             appState.data = data;
-            console.log('Data loaded from Google Sheets');
         } else {
-            throw new Error('Failed to load from API');
+            console.error('❌ Failed to load from API. Status:', response.status);
+            throw new Error(`API returned ${response.status}`);
         }
     } catch (error) {
-        console.warn('Using mock data as fallback:', error);
+        console.warn('⚠️ Using mock data as fallback. Error:', error);
         appState.data = MOCK_DATA;
     }
 }
